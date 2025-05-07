@@ -30,7 +30,25 @@ app.get("/stream", (c) => {
   };
 
   const stream = createReadStream(filePath, { start, end });
-  return new Response(stream as any, {
+  const reader = stream[Symbol.asyncIterator]();
+  const webStream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    cancel(reason) {
+      stream.destroy(reason);
+    },
+  });
+  return new Response(webStream, {
     status: 206,
     headers,
   });
